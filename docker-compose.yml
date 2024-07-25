@@ -1,0 +1,226 @@
+services:
+  # redis:
+  #   image: "bitnami/redis:6.2"
+  #   # volumes:
+  #   #   - ./data/redis:/bitnami/redis/data
+  #   #   - ./data/redis_config/redis.conf:/opt/bitnami/redis/etc/redis.conf
+  #   environment:
+  #     - ALLOW_EMPTY_PASSWORD=yes
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - mynetwork
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    # restart: always
+    container_name: qdrant
+    ports:
+      - 6333:6333
+      - 6334:6334
+    expose:
+      - 6333
+      - 6334
+      - 6335
+    configs:
+      - source: qdrant_config
+        target: /qdrant/config/production.yaml
+    volumes:
+      - ./data/qdrant_data:/qdrant/storage
+    networks:
+      - mynetwork
+
+  db:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: data-recall-system
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    ports:
+      - "5422:5432"  
+    networks:
+      - mynetwork
+
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    networks:
+      - mynetwork
+    depends_on:
+      - db
+
+  minio:
+    image: 'bitnami/minio:latest'
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    environment:
+      - MINIO_ROOT_USER=minioMQ
+      - MINIO_ROOT_PASSWORD=12345678
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - mynetwork
+
+  # rabbitmq:
+  #   image: rabbitmq:3-management-alpine
+  #   container_name: "rabbitmq"
+  #   ports:
+  #     - 15672:15672
+  #   #   - 5672:5672
+  #   environment:
+  #     - RABBITMQ_DEFAULT_USER=guest
+  #     - RABBITMQ_DEFAULT_PASS=guest
+  #   volumes:
+  #     - ./data/rabbitmq-data:/var/lib/rabbitmq/
+  #     - ./data/rabbitmq-logs:/var/log/rabbitmq
+  #   networks:
+  #     - mynetwork
+
+  # api:
+  #   build:
+  #     context: ./app
+  #     dockerfile: docker/APIDockerfile
+  #   container_name: api_container
+  #   command: uvicorn main:app --host 0.0.0.0 --port 5000
+  #   environment:
+  #     - USER_DATABASE=postgres
+  #     - PASSWORD_DATABASE=admin123
+  #     - HOST_DATABASE=db
+  #     - PORT_DATABASE=5432
+  #     - NAME_DATABASE=ads_compare
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - REDIS_PASS=
+  #     - REDIS_DB=0
+  #     - BROKER_HOST=rabbitmq
+  #     - BROKER_PORT=5672
+  #     - BROKER_USER=guest
+  #     - BROKER_PASS=guest
+  #     - BROKER_VHOST=
+  #     - NUCLIO_SCHEME=http
+  #     - NUCLIO_HOST=nuclio
+  #     - NUCLIO_PORT=8070
+  #     - NUCLIO_FUNCTION_NAMESPACE=nuclio 
+  #     - NUCLIO_DEFAULT_TIMEOUT=120
+  #   volumes:
+  #     - ./app:/app
+  #   ports:
+  #     - "5000:5000"
+  #   networks:
+  #     - mynetwork
+  #   depends_on:
+  #     - db
+  #     - redis
+  #     - rabbitmq
+  #     - nuclio
+  #     - serverless
+
+  # worker:
+  #   build:
+  #     context: ./app
+  #     dockerfile: docker/APIDockerfile
+  #   command: celery -A worker.celery_app worker --loglevel=info --logfile=logs/celery.log --pool threads --concurrency 2
+  #   volumes:
+  #     - ./app:/app
+  #   environment:
+  #     - USER_DATABASE=postgres
+  #     - PASSWORD_DATABASE=admin123
+  #     - HOST_DATABASE=db
+  #     - PORT_DATABASE=5432
+  #     - NAME_DATABASE=ads_compare
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - REDIS_PASS=
+  #     - REDIS_DB=0
+  #     - BROKER_HOST=rabbitmq
+  #     - BROKER_PORT=5672
+  #     - BROKER_USER=guest
+  #     - BROKER_PASS=guest
+  #     - BROKER_VHOST=
+  #     - NUCLIO_SCHEME=http
+  #     - NUCLIO_HOST=nuclio
+  #     - NUCLIO_PORT=8070
+  #     - NUCLIO_FUNCTION_NAMESPACE=nuclio 
+  #     - NUCLIO_DEFAULT_TIMEOUT=120
+  #   networks:
+  #     - mynetwork
+  #   depends_on:
+  #     - api
+  #     - redis
+  #     - rabbitmq
+  #     - nuclio
+  #     - serverless
+
+  # dashboard:
+  #   build:
+  #     context: ./app
+  #     dockerfile: docker/WorkerDockerfile
+  #   command: celery --broker=amqp://guest:guest@rabbitmq:5672/ flower --port=5555
+  #   volumes:
+  #     - ./app:/app
+  #   ports:
+  #     - 5556:5555
+  #   environment:
+  #     - FLOWER_BROKER_API_URL=amqp://guest:guest@rabbitmq:5672/
+  #     - CELERY_RESULT_BACKEND=redis://redis:6379/0
+  #   networks:
+  #     - mynetwork
+  #   depends_on:
+  #     - redis
+  #     - rabbitmq
+  #     - api
+  #     - worker
+
+  # nuclio:
+  #   container_name: nuclio
+  #   image: quay.io/nuclio/dashboard:stable-amd64
+  #   # restart: always
+  #   networks:
+  #     - mynetwork
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   environment:
+  #     http_proxy:
+  #     https_proxy:
+  #     no_proxy: ${no_proxy:-}
+  #     NUCLIO_CHECK_FUNCTION_CONTAINERS_HEALTHINESS: "true"
+  #     NUCLIO_DASHBOARD_DEFAULT_FUNCTION_MOUNT_MODE: "volume"
+  #   ports:
+  #     - "8071:8070"
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: 100m
+  #       max-file: "3"
+
+  # serverless:
+  #   build:
+  #     context: ./app
+  #     dockerfile: docker/NuclioDockerfile
+  #   command: ["sh", "/app/serverless/start_serverless.sh"]
+  #   volumes:
+  #     - ./app/serverless:/app/serverless
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   networks:
+  #     - mynetwork
+  #   depends_on:
+  #     - nuclio
+
+networks:
+  mynetwork:
+
+configs:
+  qdrant_config:
+    content: |
+      log_level: INFO  
